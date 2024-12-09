@@ -7,7 +7,7 @@ from torchvision import datasets, transforms
 import random
 
 def load_data(dataset):
-    data_dir = '/path/to/your/dataset'  # Update this path to your dataset location
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'dataset')
     if dataset == "custom":
         data_transforms = {
             'train': transforms.Compose([
