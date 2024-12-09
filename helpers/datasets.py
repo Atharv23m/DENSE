@@ -6,101 +6,31 @@ import torchvision.transforms as transforms
 from torchvision import datasets, transforms
 import random
 
-
-
-
 def load_data(dataset):
-    data_dir = '/dataset'
-    if dataset == "mnist":
-        train_dataset = datasets.MNIST(data_dir, train=True,
-                                       transform=transforms.Compose(
-                                           [transforms.ToTensor()]))
-        test_dataset = datasets.MNIST(data_dir, train=False,
-                                      transform=transforms.Compose([
-                                          transforms.ToTensor(),
-                                      ]))
-    elif dataset == "fmnist":
-        train_dataset = datasets.FashionMNIST(data_dir, train=True,
-                                              transform=transforms.Compose(
-                                                  [transforms.ToTensor()]))
-        test_dataset = datasets.FashionMNIST(data_dir, train=False,
-                                             transform=transforms.Compose([
-                                                 transforms.ToTensor(),
-                                             ]))
-    elif dataset == "svhn":
-        train_dataset = datasets.SVHN(data_dir, split="train",
-                                      transform=transforms.Compose(
-                                          [transforms.ToTensor()]))
-        test_dataset = datasets.SVHN(data_dir, split="test",
-                                     transform=transforms.Compose([
-                                         transforms.ToTensor(),
-                                     ]))
-    elif dataset == "cifar10":
-        train_dataset = datasets.CIFAR10(data_dir, train=True,download=True,
-                                         transform=transforms.Compose(
-                                             [
-                                                 transforms.RandomCrop(32, padding=4),
-                                                 transforms.RandomHorizontalFlip(),
-                                                 transforms.ToTensor(),
-                                             ]))
-        test_dataset = datasets.CIFAR10(data_dir, train=False,
-                                        transform=transforms.Compose([
-                                            transforms.ToTensor(),
-                                        ]))
-    elif dataset == "cifar100":
-        train_dataset = datasets.CIFAR100(data_dir, train=True,
-                                          transform=transforms.Compose(
-                                              [
-                                                  transforms.RandomCrop(32, padding=4),
-                                                  transforms.RandomHorizontalFlip(),
-                                                  transforms.ToTensor(),
-                                              ]))
-        test_dataset = datasets.CIFAR100(data_dir, train=False,
-                                         transform=transforms.Compose([
-                                             transforms.ToTensor(),
-                                         ]))
-
-    elif dataset == "tiny":
+    data_dir = '/path/to/your/dataset'  # Update this path to your dataset location
+    if dataset == "custom":
         data_transforms = {
             'train': transforms.Compose([
-                transforms.RandomRotation(20),
-                transforms.RandomHorizontalFlip(0.5),
-                transforms.ToTensor(),
-            ]),
-            'val': transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
             ]),
             'test': transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
-            ])
+            ]),
         }
-        data_dir = "data/tiny-imagenet-200/"
-        image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x])
-                          for x in ['train', 'val', 'test']}
-        train_dataset = image_datasets['train']
-        test_dataset = image_datasets['val']
+
+        train_dataset = datasets.ImageFolder(os.path.join(data_dir, 'train'), data_transforms['train'])
+        test_dataset = datasets.ImageFolder(os.path.join(data_dir, 'test'), data_transforms['test'])
     else:
         raise NotImplementedError
-    if dataset == "svhn":
-        X_train, y_train = train_dataset.data, train_dataset.labels
-        X_test, y_test = test_dataset.data, test_dataset.labels
-    else:
-        X_train, y_train = train_dataset.data, train_dataset.targets
-        X_test, y_test = test_dataset.data, test_dataset.targets
-    if "cifar10" in dataset or dataset == "svhn":
-        X_train = np.array(X_train)
-        y_train = np.array(y_train)
-        X_test = np.array(X_test)
-        y_test = np.array(y_test)
-    else:
-        X_train = X_train.data.numpy()
-        y_train = y_train.data.numpy()
-        X_test = X_test.data.numpy()
-        y_test = y_test.data.numpy()
+
+    X_train, y_train = train_dataset.samples, train_dataset.targets
+    X_test, y_test = test_dataset.samples, test_dataset.targets
 
     return X_train, y_train, X_test, y_test, train_dataset, test_dataset
-
-
 
 
 def record_net_data_stats(y_train, net_dataidx_map):
@@ -117,37 +47,15 @@ def record_net_data_stats(y_train, net_dataidx_map):
 
 
 def partition_data(dataset, partition, beta=0.4, num_users=5):
-    n_parties = num_users
     X_train, y_train, X_test, y_test, train_dataset, test_dataset = load_data(dataset)
-    data_size = y_train.shape[0]
+    data_size = len(y_train)
 
-    if partition == "iid":
-        idxs = np.random.permutation(data_size)
-        batch_idxs = np.array_split(idxs, n_parties)
-        net_dataidx_map = {i: batch_idxs[i] for i in range(n_parties)}
-
-    elif partition == "dirichlet":
-        min_size = 0
-        min_require_size = 10
-        label = np.unique(y_test).shape[0]
+    if partition == "custom":
         net_dataidx_map = {}
+        for i in range(num_users):
+            client_dir = os.path.join('/path/to/your/dataset', f'Client {i+1}')
+            client_dataset = datasets.ImageFolder(client_dir, transform=train_dataset.transform)
+            net_dataidx_map[i] = [train_dataset.samples.index(sample) for sample in client_dataset.samples]
 
-        while min_size < min_require_size:
-            idx_batch = [[] for _ in range(n_parties)]
-            for k in range(label):
-                idx_k = np.where(y_train == k)[0]
-                np.random.shuffle(idx_k)  # shuffle the label
-                # random [0.5963643 , 0.03712018, 0.04907753, 0.1115522 , 0.2058858 ]
-                proportions = np.random.dirichlet(np.repeat(beta, n_parties))
-                proportions = np.array(   # 0 or x
-                    [p * (len(idx_j) < data_size / n_parties) for p, idx_j in zip(proportions, idx_batch)])
-                proportions = proportions / proportions.sum()
-                proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
-                idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
-                min_size = min([len(idx_j) for idx_j in idx_batch])
-
-        for j in range(n_parties):
-            np.random.shuffle(idx_batch[j])
-            net_dataidx_map[j] = idx_batch[j]
     train_data_cls_counts = record_net_data_stats(y_train, net_dataidx_map)
     return train_dataset, test_dataset, net_dataidx_map, train_data_cls_counts
