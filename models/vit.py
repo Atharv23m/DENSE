@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 from functools import partial
 from itertools import repeat
-from torch._six import container_abcs
+import containers.abc as container_abcs
 import torch
 import math
 import warnings
