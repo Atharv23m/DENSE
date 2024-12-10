@@ -6,8 +6,7 @@ import torchvision.transforms as transforms
 from torchvision import datasets, transforms
 import random
 
-def load_data(dataset):
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'dataset')
+def load_data(dataset, data_dir):
     if dataset == "custom":
         data_transforms = {
             'train': transforms.Compose([
@@ -27,11 +26,10 @@ def load_data(dataset):
     else:
         raise NotImplementedError
 
-    X_train, y_train = train_dataset.samples, train_dataset.targets
-    X_test, y_test = test_dataset.samples, test_dataset.targets
+    X_train, y_train = [s[0] for s in train_dataset.samples], train_dataset.targets
+    X_test, y_test = [s[0] for s in test_dataset.samples], test_dataset.targets
 
     return X_train, y_train, X_test, y_test, train_dataset, test_dataset
-
 
 def record_net_data_stats(y_train, net_dataidx_map):
     net_cls_counts = {}
@@ -45,17 +43,13 @@ def record_net_data_stats(y_train, net_dataidx_map):
 
     return net_cls_counts
 
-
-def partition_data(dataset, partition, beta=0.4, num_users=5):
-    X_train, y_train, X_test, y_test, train_dataset, test_dataset = load_data(dataset)
+def partition_data(dataset, partition, beta=0.4, num_users=5, data_dir=None):
+    X_train, y_train, X_test, y_test, train_dataset, test_dataset = load_data(dataset, data_dir)
     data_size = len(y_train)
+    indices = list(range(data_size))
+    random.shuffle(indices)
+    shard_size = data_size // num_users
+    net_dataidx_map = {i: indices[i * shard_size: (i + 1) * shard_size] for i in range(num_users)}
 
-    if partition == "custom":
-        net_dataidx_map = {}
-        for i in range(num_users):
-            client_dir = os.path.join('/path/to/your/dataset', f'Client {i+1}')
-            client_dataset = datasets.ImageFolder(client_dir, transform=train_dataset.transform)
-            net_dataidx_map[i] = [train_dataset.samples.index(sample) for sample in client_dataset.samples]
-
-    train_data_cls_counts = record_net_data_stats(y_train, net_dataidx_map)
-    return train_dataset, test_dataset, net_dataidx_map, train_data_cls_counts
+    traindata_cls_counts = record_net_data_stats(y_train, net_dataidx_map)
+    return train_dataset, test_dataset, net_dataidx_map, traindata_cls_counts

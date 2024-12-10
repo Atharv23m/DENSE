@@ -11,6 +11,7 @@ import torchvision.models as models
 import numpy as np
 from tqdm import tqdm
 import pdb
+import os
 
 from helpers.datasets import partition_data
 from helpers.synthesizers import AdvSynthesizer
@@ -24,6 +25,7 @@ import torch.nn.functional as F
 from models.resnet import resnet18
 from models.vit import deit_tiny_patch16_224
 import wandb
+os.environ["WANDB_API_KEY"] = "507df7e1cf42732f678cc77870f0a487112ad974"
 
 warnings.filterwarnings('ignore')
 upsample = torch.nn.Upsample(mode='nearest', scale_factor=7)
@@ -81,9 +83,10 @@ def args_parser():
                         help='learning rate')
     parser.add_argument('--momentum', type=float, default=0.9,
                         help='SGD momentum (default: 0.5)')
+    parser.add_argument('--dataset', type=str, default='cifar10', help="name of dataset")
+    parser.add_argument('--data_dir', type=str, default='dataset', help="directory of the dataset")
+    
     # other arguments
-    parser.add_argument('--dataset', type=str, default='cifar10', help="name \
-                        of dataset")
     parser.add_argument('--iid', type=int, default=1,
                         help='Default set to IID. Set to 0 for non-IID.')
 
@@ -206,8 +209,8 @@ if __name__ == '__main__':
     setup_seed(args.seed)
     # pdb.set_trace()
     train_dataset, test_dataset, user_groups, traindata_cls_counts = partition_data(
-        args.dataset, args.partition, beta=args.beta, num_users=args.num_users)
-
+        args.dataset, args.partition, beta=args.beta, num_users=args.num_users, data_dir=args.data_dir)
+    
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=256,
                                               shuffle=False, num_workers=4)
     # BUILD MODEL
